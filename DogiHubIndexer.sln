@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.6.33815.320
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DogiHubIndexer", "DogiHubIndexer\DogiHubIndexer.csproj", "{B08C0130-9FEE-46A2-BCD2-CBFA0F7C95BF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DogiHubIndexer.Tests", "DogiHubIndexer.Tests\DogiHubIndexer.Tests.csproj", "{36990D12-B3BF-4062-833E-57F57C106E4F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B08C0130-9FEE-46A2-BCD2-CBFA0F7C95BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B08C0130-9FEE-46A2-BCD2-CBFA0F7C95BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B08C0130-9FEE-46A2-BCD2-CBFA0F7C95BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B08C0130-9FEE-46A2-BCD2-CBFA0F7C95BF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{36990D12-B3BF-4062-833E-57F57C106E4F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{36990D12-B3BF-4062-833E-57F57C106E4F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{36990D12-B3BF-4062-833E-57F57C106E4F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{36990D12-B3BF-4062-833E-57F57C106E4F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {33039DCC-04BA-4681-BC99-160B052E6AC4}
+	EndGlobalSection
+EndGlobal

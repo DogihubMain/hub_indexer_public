@@ -1,0 +1,21 @@
+version: "3.1"
+
+services:
+  redis:
+    image: redis/redis-stack:latest
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --dir /data --maxmemory-policy noeviction --tracking-table-max-keys 100000 --save 20 1 --loglevel warning --requirepass yourpass
+    volumes:
+      - ./redis_data:/data
+    networks:
+      - dogihub_network
+
+volumes:
+  redis:
+    driver: local
+    
+networks:
+  dogihub_network:
+    external: true
