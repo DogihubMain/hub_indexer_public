@@ -1,5 +1,3 @@
-# DRC20 (DOGINALS) INDEXER 
-CodeName: Ivy - 2024-03-18
 ### Prerequisites
 
 - Dogecoin node with RPC and txindex enable in dogecoin.conf

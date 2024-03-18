@@ -6,7 +6,7 @@ services:
     restart: always
     ports:
       - "6379:6379"
-    command: redis-server --dir /data --maxmemory-policy noeviction --tracking-table-max-keys 100000 --save 20 1 --loglevel warning --requirepass yourpass
+    command: redis-server --dir /data --maxmemory-policy noeviction --tracking-table-max-keys 100000 --loglevel warning --requirepass yourpass
     volumes:
       - ./redis_data:/data
 

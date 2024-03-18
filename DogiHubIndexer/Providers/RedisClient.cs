@@ -54,9 +54,12 @@ namespace DogiHubIndexer.Providers
 
                 while (await IsSaveInProgressAsync())
                 {
-                    _logger.Information("A BGSAVE is already in progress. Waiting for it to complete before starting a new one.");
-                    await Task.Delay(5000); 
+                    _logger.Information(
+                        "A BGSAVE is already in progress. Waiting for it to complete before starting a new one.");
+                    await Task.Delay(5000);
                 }
+
+                _logger.Information("New dump in progress...");
 
                 var lastSave = await GetLastDumpDateAsync();
                 await _database.ExecuteAsync("BGSAVE");
@@ -82,6 +85,10 @@ namespace DogiHubIndexer.Providers
             {
                 _logger.Error(ex, "Dump error exception");
                 throw;
+            }
+            finally
+            {
+                _logger.Information("New dump saved");
             }
         }
 
@@ -142,6 +149,8 @@ namespace DogiHubIndexer.Providers
 
         private void CleanOldDumps()
         {
+            _logger.Information("Cleaning old dumps...");
+
             var directoryInfo = new DirectoryInfo(_options.RedisDataFolder);
 
             var dumpsToKeep = directoryInfo.GetFiles("dump_*.rdb")
