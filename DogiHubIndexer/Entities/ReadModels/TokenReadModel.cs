@@ -24,6 +24,12 @@ namespace DogiHubIndexer.Entities.ReadModels
         public string Protocol { get; set; } = "drc-20";
         [JsonPropertyName("t")]
         public required string TransactionHash { get; set; }
+        [JsonPropertyName("d")]
+        public DateTimeOffset Date { get; set; }
+        [JsonPropertyName("e")]
+        public int? Decimal { get; set; }
+        [JsonPropertyName("b")]
+        public required string DeployedBy { get; set; }
 
         public void IncreaseCurrentSupply(decimal amount)
         {

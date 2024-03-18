@@ -12,10 +12,12 @@ namespace DogiHubIndexer.Services
     public class InscriptionService : IInscriptionService
     {
         private readonly InscriptionValidator _inscriptionValidator;
+        private readonly Options _options;
 
-        public InscriptionService(InscriptionValidator inscriptionValidator)
+        public InscriptionService(InscriptionValidator inscriptionValidator, Options options)
         {
             _inscriptionValidator = inscriptionValidator;
+            _options = options;
         }
 
         private const string OrdIndicator = "6f7264";
@@ -62,7 +64,14 @@ namespace DogiHubIndexer.Services
                         genesisTxId,
                         inscriptionId);
 
-                    if (inscriptionRawData != null) return inscriptionRawData;
+                    if (inscriptionRawData != null)
+                    {
+                        if (!IsInscriptionTypeToParse(InscriptionTypeEnum.Token))
+                        {
+                            return null;
+                        }
+                        return inscriptionRawData;
+                    }
                 }
 
                 //dns ?
@@ -75,7 +84,15 @@ namespace DogiHubIndexer.Services
                     block.Header.BlockTime,
                     genesisTxId,
                     inscriptionId);
-                    if (inscriptionRawData != null) return inscriptionRawData;
+
+                    if (inscriptionRawData != null)
+                    {
+                        if (!IsInscriptionTypeToParse(InscriptionTypeEnum.Dns))
+                        {
+                            return null;
+                        }
+                        return inscriptionRawData;
+                    }
                 }
             }
 
@@ -88,7 +105,15 @@ namespace DogiHubIndexer.Services
                 block.Header.BlockTime,
                 genesisTxId,
                 inscriptionId);
-            if (inscriptionRawData != null) return inscriptionRawData;
+
+            if (inscriptionRawData != null)
+            {
+                if (!IsInscriptionTypeToParse(InscriptionTypeEnum.Dogemap))
+                {
+                    return null;
+                }
+                return inscriptionRawData;
+            }
 
             //nft ?
             inscriptionRawData = ExtractNftInscriptionFromScriptSig(
@@ -100,9 +125,24 @@ namespace DogiHubIndexer.Services
                 mimeType,
                 genesisTxId,
                 inscriptionId);
-            if (inscriptionRawData != null) return inscriptionRawData;
+            if (inscriptionRawData != null)
+            {
+                if (!IsInscriptionTypeToParse(InscriptionTypeEnum.Nft))
+                {
+                    return null;
+                }
+                return inscriptionRawData;
+            }
 
             return inscriptionRawData;
+        }
+
+        private bool IsInscriptionTypeToParse(InscriptionTypeEnum inscriptionType)
+        {
+            return _options.InscriptionTypes != null 
+                && _options.InscriptionTypes.Any() 
+                ? _options.InscriptionTypes.Contains(inscriptionType) 
+                : true;
         }
 
         private bool CheckIfJsonDocumentIsProbablyAToken(JsonDocument jsonDocument, string mimeType)

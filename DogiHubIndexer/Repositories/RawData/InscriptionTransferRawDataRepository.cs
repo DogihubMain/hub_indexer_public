@@ -3,6 +3,7 @@ using DogiHubIndexer.Entities.RawData;
 using DogiHubIndexer.Helpers;
 using DogiHubIndexer.Providers.Interfaces;
 using DogiHubIndexer.Repositories.RawData.Interfaces;
+using NBitcoin;
 
 namespace DogiHubIndexer.Repositories.RawData
 {
@@ -57,7 +58,7 @@ namespace DogiHubIndexer.Repositories.RawData
 
         private async Task AddAsyncInternal(InscriptionTransferRawData entity)
         {
-            var inscriptionTransferHashKey = RedisKeys.GetInscriptionTransferHashKey(entity.BlockNumber, entity.TransactionIndex);
+            var inscriptionTransferHashKey = RedisKeys.GetInscriptionTransferHashKey(entity.TransactionHash);
             var inscriptionTransferByBlockKey = RedisKeys.GetInscriptionTransferByBlockKey(entity.BlockNumber);
             var inscriptionTransferByInscriptionTypeKey = RedisKeys.GetInscriptionTransferByInscriptionTypeKey(entity.Inscription!.Type, entity.Inscription!.Name);
 
@@ -66,7 +67,7 @@ namespace DogiHubIndexer.Repositories.RawData
             await _redisClient.StringSetAsync(inscriptionTransferHashKey, serialized);
 
             await _redisClient.SetAddAsync(inscriptionTransferByBlockKey, inscriptionTransferHashKey);
-            await _redisClient.SortedSetAddAsync(inscriptionTransferByInscriptionTypeKey, inscriptionTransferHashKey, entity.Date!.Value.ToUnixTimeSeconds());
+            await _redisClient.SortedSetAddAsync(inscriptionTransferByInscriptionTypeKey, inscriptionTransferHashKey, entity.Date.ToUnixTimeSeconds());
         }
 
         public async Task<List<InscriptionTransferRawData>> GetInscriptionTransfersByBlockAsync(ulong blockNumber)
@@ -74,36 +75,41 @@ namespace DogiHubIndexer.Repositories.RawData
             var inscriptionTransferByBlockKey = RedisKeys.GetInscriptionTransferByBlockKey(blockNumber);
             var hashKeys = await _redisClient.SetMembersAsync(inscriptionTransferByBlockKey);
 
-            var tasks = hashKeys.Select(key => _redisClient.StringGetAsync(key!));
+            var tasks = hashKeys.Select(async key =>
+            {
+                var result = await _redisClient.StringGetAsync(key!);
+                var transactionHash = key.ToString().Split(new[] { ':' }, 2)[1];
+                return InscriptionTransferRawData.Build(result, transactionHash);
+            });
+
             var results = await Task.WhenAll(tasks);
 
-            var inscriptionTransfersWithoutInscriptions = results.Select(result => JsonHelper.Deserialize<InscriptionTransferRawData>(result!)).ToList();
+            List<InscriptionTransferRawData> inscriptionTransfersWithoutInscriptions = results.Where(result => result != null).ToList()!;
 
-            if (inscriptionTransfersWithoutInscriptions.Count > 0)
+            if (inscriptionTransfersWithoutInscriptions.Count() > 0)
             {
                 var enrichTasks = inscriptionTransfersWithoutInscriptions.Select(inscriptionTransferEntity => _inscriptionRawDataRepository.GetAsync(inscriptionTransferEntity.InscriptionId)).ToArray();
                 var enrichedTokens = await Task.WhenAll(enrichTasks);
 
-                for (int i = 0; i < inscriptionTransfersWithoutInscriptions.Count; i++)
+                for (int i = 0; i < inscriptionTransfersWithoutInscriptions.Count(); i++)
                 {
-                    inscriptionTransfersWithoutInscriptions[i].Inscription = enrichedTokens[i];
+                    inscriptionTransfersWithoutInscriptions[i]!.Inscription = enrichedTokens[i];
                 }
                 return inscriptionTransfersWithoutInscriptions.Where(x => x.Inscription != null).ToList();
             }
             return inscriptionTransfersWithoutInscriptions;
         }
 
-        public async Task DeleteAsync(ulong blockNumber, int transactionIndex, InscriptionRawData inscriptionRawData)
+        public async Task DeleteAsync(uint256 transactionHash, ulong blockNumber, InscriptionRawData inscriptionRawData)
         {
-            var inscriptionTransferHashKey = RedisKeys.GetInscriptionTransferHashKey(blockNumber, transactionIndex);
+            var inscriptionTransferHashKey = RedisKeys.GetInscriptionTransferHashKey(transactionHash);
 
             var inscriptionTransferByBlockKey = RedisKeys.GetInscriptionTransferByBlockKey(blockNumber);
             var inscriptionTransferByInscriptionTypeKey = RedisKeys.GetInscriptionTransferByInscriptionTypeKey(inscriptionRawData.Type, inscriptionRawData.Name);
 
             await _redisClient.KeyDeleteAsync(inscriptionTransferHashKey);
-
             await _redisClient.SetRemoveAsync(inscriptionTransferByBlockKey, inscriptionTransferHashKey);
-            await _redisClient.SetRemoveAsync(inscriptionTransferByInscriptionTypeKey, inscriptionTransferHashKey);
+            await _redisClient.SortedSetRemoveAsync(inscriptionTransferByInscriptionTypeKey, inscriptionTransferHashKey);
         }
     }
 }

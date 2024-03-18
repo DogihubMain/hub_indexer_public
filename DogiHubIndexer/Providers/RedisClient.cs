@@ -1,6 +1,8 @@
 ﻿using DogiHubIndexer.Providers.Interfaces;
+using Serilog;
 using StackExchange.Redis;
 using System.Diagnostics;
+using System.IO;
 using System.Net;
 using System.Text.RegularExpressions;
 
@@ -11,12 +13,14 @@ namespace DogiHubIndexer.Providers
         private IDatabase _database;
         private ConnectionMultiplexer _connectionMultiplexer;
         private readonly Options _options;
+        private readonly ILogger _logger;
 
-        public RedisClient(string connectionString, Options options, bool flushDatabase = false)
+        public RedisClient(string connectionString, Options options, ILogger logger, bool flushDatabase = false)
         {
             _connectionMultiplexer = ConnectionMultiplexer.Connect(connectionString);
             _options = options;
             _database = _connectionMultiplexer.GetDatabase();
+            _logger = logger;
 
             if (flushDatabase)
             {
@@ -44,72 +48,143 @@ namespace DogiHubIndexer.Providers
 
         public async Task RunDumpAsync(ulong blockNumber)
         {
-            var lastSave = await GetLastDumpDateAsync();
-            await _database.ExecuteAsync("BGSAVE");
-
-            while (true)
+            try
             {
-                await Task.Delay(1000);
-                var currentSave = await GetLastDumpDateAsync();
-                if (currentSave > lastSave)
-                {
-                    //dump finished
-                    var dumpFilePathName = Path.Combine(_options.RedisDataFolder, "dump.rdb");
-                    var newDumpFilePathName = Path.Combine(_options.RedisDataFolder, $"dump_{blockNumber}.rdb");
+                CleanOldDumps();
 
-                    File.Copy(dumpFilePathName, newDumpFilePathName, overwrite: true);
-                    break;
+                while (await IsSaveInProgressAsync())
+                {
+                    _logger.Information("A BGSAVE is already in progress. Waiting for it to complete before starting a new one.");
+                    await Task.Delay(5000); 
                 }
+
+                var lastSave = await GetLastDumpDateAsync();
+                await _database.ExecuteAsync("BGSAVE");
+
+                while (true)
+                {
+                    await Task.Delay(10000);
+                    var currentSave = await GetLastDumpDateAsync();
+                    if (currentSave > lastSave)
+                    {
+                        //dump finished
+                        var dumpFilePathName = Path.Combine(_options.RedisDataFolder, "dump.rdb");
+                        var newDumpFilePathName = Path.Combine(_options.RedisDataFolder, $"dump_{blockNumber}.rdb");
+
+                        File.Copy(dumpFilePathName, newDumpFilePathName, overwrite: true);
+
+                        _logger.Information($"Dump {newDumpFilePathName} created with success");
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Dump error exception");
+                throw;
             }
         }
 
+        public async Task<bool> IsSaveInProgressAsync()
+        {
+            var info = await _database.ExecuteAsync("INFO", "persistence");
+            var infoString = info.ToString();
+            return infoString.Contains("rdb_bgsave_in_progress:1");
+        }
+
+
         public async Task<ulong?> RunRestoreAsync(ulong blockNumber)
         {
-            EnsureDatabaseConnection();
-
-            ulong? restoredBlockHeight = null;
-
-            // Attempt to find the exact match first
-            var dumpFilePathName = Path.Combine(_options.RedisDataFolder, $"dump_{blockNumber}.rdb");
-
-            if (!File.Exists(dumpFilePathName))
+            try
             {
-                // If not found, try to find the closest lower block number
-                var directoryInfo = new DirectoryInfo(_options.RedisDataFolder);
-                var files = directoryInfo.GetFiles("dump_*.rdb")
-                    .Select(f => (FileName: f.Name, BlockNumber: ulong.Parse(Regex.Match(f.Name, @"dump_(\d+).rdb").Groups[1].Value)))
-                    .Where(f => f.BlockNumber <= blockNumber)
-                    .OrderByDescending(f => f.BlockNumber)
-                    .ToList();
+                EnsureDatabaseConnection();
 
-                if (files.Count() == 0)
+                ulong? restoredBlockHeight = null;
+
+                // Attempt to find the exact match first
+                var dumpFilePathName = Path.Combine(_options.RedisDataFolder, $"dump_{blockNumber}.rdb");
+
+                if (!File.Exists(dumpFilePathName))
                 {
-                    throw new FileNotFoundException("No dump files available to restore from.");
+                    // If not found, try to find the closest lower block number
+                    var directoryInfo = new DirectoryInfo(_options.RedisDataFolder);
+                    var files = directoryInfo.GetFiles("dump_*.rdb")
+                        .Select(f => (FileName: f.Name, BlockNumber: ulong.Parse(Regex.Match(f.Name, @"dump_(\d+).rdb").Groups[1].Value)))
+                        .Where(f => f.BlockNumber <= blockNumber)
+                        .OrderByDescending(f => f.BlockNumber)
+                        .ToList();
+
+                    if (files.Count() == 0)
+                    {
+                        throw new FileNotFoundException("No dump files available to restore from.");
+                    }
+
+                    // Use the closest block number file
+                    dumpFilePathName = Path.Combine(_options.RedisDataFolder, files.First().FileName);
+                    restoredBlockHeight = files.First().BlockNumber;
                 }
 
-                // Use the closest block number file
-                dumpFilePathName = Path.Combine(_options.RedisDataFolder, files.First().FileName);
-                restoredBlockHeight = files.First().BlockNumber;
+                await StopRedisServerAsync();
+
+                var targetDumpFilePathName = Path.Combine(_options.RedisDataFolder, "dump.rdb");
+                File.Copy(dumpFilePathName, targetDumpFilePathName, overwrite: true);
+
+                await StartRedisServerAsync();
+
+                return restoredBlockHeight;
             }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Restore exception");
+                throw;
+            }
+        }
 
-            await StopRedisServerAsync();
+        private void CleanOldDumps()
+        {
+            var directoryInfo = new DirectoryInfo(_options.RedisDataFolder);
 
-            var targetDumpFilePathName = Path.Combine(_options.RedisDataFolder, "dump.rdb");
-            File.Copy(dumpFilePathName, targetDumpFilePathName, overwrite: true);
+            var dumpsToKeep = directoryInfo.GetFiles("dump_*.rdb")
+                .OrderByDescending(f => ulong.Parse(Regex.Match(f.Name, @"dump_(\d+).rdb").Groups[1].Value))
+                .Take(5)
+                .Select(f => f.Name)
+                .ToList();
 
-            await StartRedisServerAsync();
+            var dumpsToDelete = directoryInfo.GetFiles("dump_*.rdb")
+                .Where(x => !dumpsToKeep.Contains(x.Name))
+                .Select(x => x.FullName)
+                .ToList();
 
-            return restoredBlockHeight;
+            foreach (var dumpToDeleteFullName in dumpsToDelete)
+            {
+                File.Delete(dumpToDeleteFullName);
+            }
         }
 
         private Task StopRedisServerAsync()
         {
-            return ExecuteDockerComposeCommandAsync("down");
+            try
+            {
+                return ExecuteDockerComposeCommandAsync("down");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Stop redis exception");
+                throw;
+            }
         }
 
         private Task StartRedisServerAsync()
         {
-            return ExecuteDockerComposeCommandAsync("up -d");
+            try
+            {
+                return ExecuteDockerComposeCommandAsync("up -d");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Start redis exception");
+                throw;
+            }
         }
 
         private async Task ExecuteDockerComposeCommandAsync(string command)
@@ -221,11 +296,13 @@ namespace DogiHubIndexer.Providers
 
         public Task KeyDeleteAsync(string key)
         {
+            EnsureDatabaseConnection();
             return _database.KeyDeleteAsync(key);
         }
 
         public Task SortedSetRemoveAsync(string key, RedisValue member)
         {
+            EnsureDatabaseConnection();
             return _database.SortedSetRemoveAsync(key, member);
         }
 
@@ -238,7 +315,5 @@ namespace DogiHubIndexer.Providers
         {
             return _connectionMultiplexer.GetServer(endpoint);
         }
-
-
     };
 }

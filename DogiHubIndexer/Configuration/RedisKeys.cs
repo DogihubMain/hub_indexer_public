@@ -1,13 +1,13 @@
 ﻿
 using DogiHubIndexer.Entities.RawData;
+using NBitcoin;
 
 namespace DogiHubIndexer.Configuration
 {
     public static class RedisKeys
     {
-
-        //InscriptionTransfer:{blockNumber}:{index}
-        public const string InscriptionTransferHashKeyFormat = "it:{0}:{1}";
+        //InscriptionTransfer:{transactionHash}
+        public const string InscriptionTransferHashKeyFormat = "it:{0}";
 
         ////InscriptionTransfer:Block:{blockNumber}
         public const string InscriptionTransferByBlockKeyFormat = "it:b:{0}";
@@ -39,9 +39,12 @@ namespace DogiHubIndexer.Configuration
         //BalanceDetail:{address}:{tick}"
         public const string BalanceDetailKeyFormat = "bd:{0}:{1}";
 
-        public static string GetInscriptionTransferHashKey(ulong blockNumber, int index)
+        //TokenList
+        public const string TokenListKeyFormat = "tl";
+
+        public static string GetInscriptionTransferHashKey(uint256 transactionHash)
         {
-            return string.Format(InscriptionTransferHashKeyFormat, blockNumber, index);
+            return string.Format(InscriptionTransferHashKeyFormat, transactionHash);
         }
 
         public static string GetInscriptionTransferByBlockKey(ulong blockNumber)
@@ -95,6 +98,11 @@ namespace DogiHubIndexer.Configuration
         public static string GetBalanceDetailKey(string address, string tick)
         {
             return string.Format(BalanceDetailKeyFormat, address, tick);
+        }
+
+        public static string GetTokenListKey()
+        {
+            return TokenListKeyFormat;
         }
 
         private static string GetShortInscriptionType(InscriptionTypeEnum inscriptionTypeEnum)

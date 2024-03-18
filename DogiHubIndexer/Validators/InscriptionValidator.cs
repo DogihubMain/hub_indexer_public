@@ -16,6 +16,7 @@ namespace DogiHubIndexer.Validators
         private const string OpReg = "reg";
         private const string DogemapExtension = ".dogemap";
         private const int DogemapNumberMax = 5000000;
+        private const int DecimalMax = 18;
         private static readonly string[] DnsExtensionsAllowed = new string[] { "x", "doge", "hub", "oifi" };
 
         public bool TryGetTokenInscriptionContent(
@@ -35,6 +36,7 @@ namespace DogiHubIndexer.Validators
             var amt = GetNullableJsonField(root, "amt");
             var lim = GetNullableJsonField(root, "lim");
             var max = GetNullableJsonField(root, "max");
+            var dec = GetNullableJsonField(root, "dec");
 
             if (p == null || !p.Equals(DRC_20_SYMBOLS, StringComparison.Ordinal))
                 return false;
@@ -44,6 +46,12 @@ namespace DogiHubIndexer.Validators
 
             if (string.IsNullOrEmpty(tick))
                 return false;
+
+            if (!string.IsNullOrEmpty(dec) &&
+                (!int.TryParse(dec, out int decInt) || decInt > DecimalMax))
+            {
+                return false;
+            }
 
             //only tick with a lenght of 4 or specificaly 𝕏 are allowed 
             if (tick.Length != 4 && tick != "𝕏")
@@ -59,7 +67,8 @@ namespace DogiHubIndexer.Validators
                 tick = tick,
                 amt = amt,
                 lim = lim,
-                max = max
+                max = max,
+                dec = dec
             };
 
             if (op == OpDeploy)
@@ -278,16 +287,22 @@ namespace DogiHubIndexer.Validators
         }
 
         #endregion
-
+        
         private static string? GetNullableJsonField(JsonElement root, string propertyName)
         {
-            string? fieldValue = null;
             if (root.TryGetProperty(propertyName, out JsonElement jsonElement))
             {
-                fieldValue = jsonElement.GetString();
+                if (jsonElement.ValueKind == JsonValueKind.String)
+                {
+                    return jsonElement.GetString();
+                }
+                else
+                {
+                    return null;
+                }
             }
 
-            return fieldValue;
+            return null;
         }
     }
 }

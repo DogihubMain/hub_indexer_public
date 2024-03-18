@@ -71,7 +71,7 @@ namespace DogiHubIndexer.Services
             var totalTimeMs = stopwatch.ElapsedMilliseconds;
             var averageTimePerTransaction = totalTransactions > 0 ? totalTimeMs / (double)totalTransactions : 0;
 
-            _logger.Information($"{totalTransactions} transactions processed in {totalTimeMs} ms ({averageTimePerTransaction:F2}/tx)");
+            _logger.Information($"{totalTransactions} transactions processed in {totalTimeMs} ms ({averageTimePerTransaction:F2}/tx) - {block.Header.BlockTime.ToString("dd/MM/yyyy HH:mm")}");
         }
 
         public async Task ParseTransactionAsync(

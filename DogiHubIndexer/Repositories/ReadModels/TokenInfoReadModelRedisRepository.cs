@@ -19,7 +19,10 @@ namespace DogiHubIndexer.Repositories.ReadModels
         {
             var serialized = JsonHelper.Serialize(readModel);
             string tokenKey = RedisKeys.GetTokenInfoKey(readModel.Tick);
+            string tokenListKey = RedisKeys.GetTokenListKey();
+
             await _redisClient.StringSetAsync(tokenKey, serialized);
+            await _redisClient.SortedSetAddAsync(tokenListKey, tokenKey, readModel.Date.ToUnixTimeSeconds());
         }
 
         public async Task<TokenReadModel?> GetAsync(string tick)

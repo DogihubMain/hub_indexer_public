@@ -59,6 +59,7 @@ class Program
             new RedisClient(
                 options.RedisConnectionString,
                 options,
+                Log.Logger,
                 options.FlushRedis.GetValueOrDefault(false)
             )
         );
@@ -71,7 +72,7 @@ class Program
             .WriteTo.Console()
             .WriteTo.File(
                 path: options.LogFilePath,
-                rollingInterval: RollingInterval.Day, 
+                rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: null
             )
             .CreateLogger();

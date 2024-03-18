@@ -1,5 +1,5 @@
-﻿using DogiHubIndexer.Converters;
-using DogiHubIndexer.Entities.Interfaces;
+﻿using DogiHubIndexer.Entities.Interfaces;
+using DogiHubIndexer.Helpers;
 using NBitcoin;
 using System.ComponentModel;
 using System.Text.Json.Serialization;
@@ -12,9 +12,8 @@ namespace DogiHubIndexer.Entities.RawData
         public required ulong BlockNumber { get; set; }
         [JsonPropertyName("p")]
         public int TransactionIndex { get; set; }
-        [JsonPropertyName("h")]
-        [JsonConverter(typeof(Uint256JsonConverter))]
-        public required uint256 TransactionHash { get; set; }
+        [JsonIgnore]
+        public uint256 TransactionHash { get; set; }
         [JsonPropertyName("x")]
         public required uint InputIndex { get; set; }
         [JsonIgnore]
@@ -27,8 +26,8 @@ namespace DogiHubIndexer.Entities.RawData
         public required string Receiver { get; set; }
         [JsonPropertyName("s")]
         public string? Sender { get; set; } // only relevant if really a transfer happened
-        [JsonIgnore]
-        public DateTimeOffset? Date { get; set; }
+        [JsonPropertyName("d")]
+        public DateTimeOffset Date { get; set; }
 
         public static InscriptionTransferType? GetConfirmedTypeEquivalent(InscriptionTransferType inscriptionTransferType)
         {
@@ -40,6 +39,19 @@ namespace DogiHubIndexer.Entities.RawData
                 InscriptionTransferType.PENDING_DOGEMAP => InscriptionTransferType.CONFIRMED_DOGEMAP,
                 _ => null
             };
+        }
+
+        public static InscriptionTransferRawData? Build(string? json, string transactionHash)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null;
+
+            var rawData = JsonHelper.Deserialize<InscriptionTransferRawData>(json!);
+
+            if (rawData != null)
+            {
+                rawData.TransactionHash = uint256.Parse(transactionHash);
+            }
+            return rawData;
         }
     }
 

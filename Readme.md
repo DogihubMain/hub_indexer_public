@@ -60,6 +60,7 @@ Create a app/run_indexer.sh file with the following content (adjust parameters f
       --cpuNumber "24" \
       --redisDataFolder "/app/redis/redis_data/" \
 	  --logFilePath "/app/logs/dogihubindexer-.log" \
+	  --inscriptionTypes Token Nft Dogemap Dns
       --mode "startup" &
 
 Use allowAdmin=true in the redis connection string to enable flush databases options
@@ -90,7 +91,7 @@ and just use the kill command on the corresponding id :
 First block containing an inscription
 
 #### lastStartupBlockHeight
-Last block to pars during startup mode (higher block height is taken from blockchain if null)
+Last block to parse during startup mode (higher block height is taken from blockchain if null)
 
 #### rpcUrl
 RPC Url
@@ -111,7 +112,8 @@ Redis connection string
 For testing purpose, flush all redis databases (must be admin)
 
 #### pendingConfirmationNumber
-Number of pending blocks to confirm a transfer in a balance
+Number of pending blocks to confirm a transfer in a balance 
+(default 16)
 
 #### cpuNumber
 Host CPU number for parallelism
@@ -124,6 +126,23 @@ File path of logs
 
 #### mode
 Startup or Daemon mode are available 
+
+### inscriptionTypes
+
+inscriptionTypes field allow you to chose which type of inscription you want to parse
+available values : Token, Dogemap, Nft, Dns
+(to parse multiple type at the same time just write them separate by a space)
+
+### numberOfBlockBehindBlockchain
+To avoid frequent reorgs you can chose the number of block you want to stay behind the blockchain during daemon mode
+(default 0)
+
+### startupAutomaticDumpStep
+Automatically dump redis db each x blocks during startup mode
+(default 10000)
+
+### deleteTransactionHistory
+Decide if you delete all related inscriptions transactions history to lighten redis
 
 ### License
 

@@ -58,24 +58,5 @@ namespace DogiHubIndexer.Entities.RawData.Extensions
             }
             else throw new ArgumentException("Invalid string value for inscription type", nameof(InscriptionTransferType));
         }
-
-
-        public static TokenReadModel ToTokenReadModel(
-            this InscriptionRawData inscriptionEntity) {
-
-            var styles = NumberStyles.AllowLeadingWhite
-                         | NumberStyles.AllowTrailingWhite
-                         | NumberStyles.AllowDecimalPoint;
-
-            return new TokenReadModel()
-            {
-                Tick = inscriptionEntity.TokenContent!.tick,
-                Protocol = inscriptionEntity.TokenContent.p,
-                Lim = decimal.Parse(inscriptionEntity.TokenContent.lim!, styles, CultureInfo.InvariantCulture),
-                Max = decimal.Parse(inscriptionEntity.TokenContent.max!, styles, CultureInfo.InvariantCulture),
-                CurrentSupply = 0,
-                TransactionHash = inscriptionEntity.GenesisTxId.ToString()
-            };
-        } 
     }
 }

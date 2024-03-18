@@ -18,19 +18,7 @@ namespace DogiHubIndexer.Repositories.ReadModels
 
         public async Task AddAsync(UserBalanceTokenReadModel userBalanceReadModel)
         {
-            var json = JsonHelper.Serialize(userBalanceReadModel);
-
-            string balanceDetailKey = RedisKeys.GetBalanceDetailKey(userBalanceReadModel.Address, userBalanceReadModel.TokenTick);
-            string userBalanceKey = RedisKeys.GetUserBalanceKey(InscriptionTypeEnum.Token, userBalanceReadModel.Address);
-            string tokenBalanceKey = RedisKeys.GetTokenBalanceKey(userBalanceReadModel.TokenTick);
-
-            var batch = _redisClient.CreateBatch();
-            var balanceDetailTask = batch.StringSetAsync(balanceDetailKey, json);
-            var userTask = batch.SortedSetAddAsync(userBalanceKey, balanceDetailKey, DateTimeOffset.Now.ToUnixTimeSeconds());
-            var tokenTask = batch.SortedSetAddAsync(tokenBalanceKey, balanceDetailKey, (double)userBalanceReadModel.BalanceSum);
-            batch.Execute();
-
-            await Task.WhenAll(balanceDetailTask, userTask, tokenTask);
+            await AddOrUpdateInternalAsync(userBalanceReadModel);
         }
 
         public async Task<UserBalanceTokenReadModel?> GetAsync(string tick, string address)
@@ -42,6 +30,11 @@ namespace DogiHubIndexer.Repositories.ReadModels
 
         public async Task UpdateAsync(UserBalanceTokenReadModel userBalanceReadModel)
         {
+            await AddOrUpdateInternalAsync(userBalanceReadModel);
+        }
+
+        private async Task AddOrUpdateInternalAsync(UserBalanceTokenReadModel userBalanceReadModel)
+        {
             var json = JsonHelper.Serialize(userBalanceReadModel);
 
             string balanceDetailKey = RedisKeys.GetBalanceDetailKey(userBalanceReadModel.Address, userBalanceReadModel.TokenTick);
@@ -49,12 +42,26 @@ namespace DogiHubIndexer.Repositories.ReadModels
             string tokenBalanceKey = RedisKeys.GetTokenBalanceKey(userBalanceReadModel.TokenTick);
 
             var batch = _redisClient.CreateBatch();
-            var balanceDetailTask = batch.StringSetAsync(balanceDetailKey, json);
-            var userTask = batch.SortedSetAddAsync(userBalanceKey, balanceDetailKey, DateTimeOffset.Now.ToUnixTimeSeconds());
-            var tokenTask = batch.SortedSetAddAsync(tokenBalanceKey, balanceDetailKey, (double)userBalanceReadModel.BalanceSum);
-            batch.Execute();
+            var tasks = new List<Task>
+            {
+                batch.StringSetAsync(balanceDetailKey, json)
+            };
 
-            await Task.WhenAll(balanceDetailTask, userTask, tokenTask);
+            if (userBalanceReadModel.BalanceSum == 0)
+            {
+                //for user balance with keep the tick even if quantity become 0 for tracibility
+                tasks.Add(batch.SortedSetAddAsync(userBalanceKey, balanceDetailKey, DateTimeOffset.Now.ToUnixTimeSeconds()));
+                //remove from holders list
+                tasks.Add(batch.SortedSetRemoveAsync(tokenBalanceKey, balanceDetailKey));
+            }
+            else
+            {
+                tasks.Add(batch.SortedSetAddAsync(userBalanceKey, balanceDetailKey, DateTimeOffset.Now.ToUnixTimeSeconds()));
+                tasks.Add(batch.SortedSetAddAsync(tokenBalanceKey, balanceDetailKey, (double)userBalanceReadModel.BalanceSum));
+            }
+
+            batch.Execute();
+            await Task.WhenAll(tasks);
         }
     }
 }

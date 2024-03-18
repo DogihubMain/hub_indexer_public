@@ -1,4 +1,5 @@
 ﻿using DogiHubIndexer.Entities.RawData;
+using NBitcoin;
 
 namespace DogiHubIndexer.Repositories.RawData.Interfaces
 {
@@ -8,6 +9,6 @@ namespace DogiHubIndexer.Repositories.RawData.Interfaces
 
         Task<List<InscriptionTransferRawData>> GetInscriptionTransfersByBlockAsync(ulong blockNumber);
 
-        Task DeleteAsync(ulong blockNumber, int transactionIndex, InscriptionRawData inscriptionRawData);
+        Task DeleteAsync(uint256 transactionHash, ulong blockNumber, InscriptionRawData inscriptionRawData);
     }
 }

@@ -1,5 +1,4 @@
 ﻿using DogiHubIndexer.Configuration;
-using DogiHubIndexer.Entities;
 using DogiHubIndexer.Entities.RawData;
 using DogiHubIndexer.Helpers;
 using DogiHubIndexer.Providers.Interfaces;

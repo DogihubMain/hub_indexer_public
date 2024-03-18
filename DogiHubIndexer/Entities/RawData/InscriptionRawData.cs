@@ -1,6 +1,5 @@
 ﻿using DogiHubIndexer.Converters;
 using DogiHubIndexer.Entities.Interfaces;
-using DogiHubIndexer.Entities.ReadModels;
 using DogiHubIndexer.Helpers;
 using NBitcoin;
 using System.Text.Json.Serialization;
@@ -28,9 +27,8 @@ namespace DogiHubIndexer.Entities.RawData
         public DnsInscriptionContentRawData? DnsContent { get; init; }
         [JsonPropertyName("n")]
         public NftInscriptionContentRawData? NftContent { get; init; }
-        [JsonPropertyName("g")]
-        [JsonConverter(typeof(Uint256JsonConverter))]
-        public required uint256 GenesisTxId { get; init; }
+        [JsonIgnore]
+        public uint256 GenesisTxId { get; set; }
         [JsonPropertyName("c")]
         public required string ContentType { get; init; }
         [JsonPropertyName("s")]
@@ -70,7 +68,9 @@ namespace DogiHubIndexer.Entities.RawData
 
             if (readModel != null)
             {
-                readModel.Id = InscriptionId.Parse(inscriptionId);
+                var inscriptionIdParsed = InscriptionId.Parse(inscriptionId);
+                readModel.Id = inscriptionIdParsed;
+                readModel.GenesisTxId = inscriptionIdParsed.Txid;
             }
             return readModel;
         }
@@ -89,7 +89,7 @@ namespace DogiHubIndexer.Entities.RawData
         private string _tick;
 
         [JsonIgnore]
-        public  string p { get; set; }
+        public string p { get; set; }
         public required string op { get; set; }
 
         public required string tick
@@ -100,6 +100,7 @@ namespace DogiHubIndexer.Entities.RawData
         public string? amt { get; set; }
         public string? max { get; set; }
         public string? lim { get; set; }
+        public string? dec { get; set; }
     }
 
     public class DogemapInscriptionContentRawData

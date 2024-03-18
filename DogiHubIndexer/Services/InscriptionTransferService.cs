@@ -19,6 +19,7 @@ namespace DogiHubIndexer.Services
         private readonly IUserBalanceNftsReadModelRepository _userBalanceNftsReadModelRepository;
         private readonly IUserBalanceDogemapsReadModelRepository _userBalanceDogemapsReadModelRepository;
         private readonly ILogger _logger;
+        private readonly Options _options;
 
         private readonly IBlockService _blockService;
 
@@ -31,7 +32,8 @@ namespace DogiHubIndexer.Services
             ILogger logger,
             IUserBalanceDnsReadModelRepository userBalanceDnsReadModelRepository,
             IUserBalanceNftsReadModelRepository userBalanceNftsReadModelRepository,
-            IUserBalanceDogemapsReadModelRepository userBalanceDogemapsReadModelRepository)
+            IUserBalanceDogemapsReadModelRepository userBalanceDogemapsReadModelRepository,
+            Options options)
         {
             _inscriptionTransferRepository = inscriptionTransferRepository;
             _blockService = blockService;
@@ -42,6 +44,7 @@ namespace DogiHubIndexer.Services
             _userBalanceDnsReadModelRepository = userBalanceDnsReadModelRepository;
             _userBalanceNftsReadModelRepository = userBalanceNftsReadModelRepository;
             _userBalanceDogemapsReadModelRepository = userBalanceDogemapsReadModelRepository;
+            _options = options;
         }
 
         public async Task CalculateAndUpdateReadModelsAsync(ulong blockNumber, bool usePending)
@@ -119,6 +122,17 @@ namespace DogiHubIndexer.Services
                 default:
                     throw new ArgumentException("Invalid inscription transfer type", nameof(InscriptionTransferType));
             }
+
+            //in all cases we deleted confirmed inscription transfer (like they are juste temporary to handle pending mode)
+            //and others only if "delete transaction history" parameter is enabled
+            if(_options.DeleteTransactionHistory
+                || inscriptionTransferEntity.InscriptionTransferType == InscriptionTransferType.CONFIRMED_TRANSFER
+                || inscriptionTransferEntity.InscriptionTransferType == InscriptionTransferType.CONFIRMED_DNS
+                || inscriptionTransferEntity.InscriptionTransferType == InscriptionTransferType.CONFIRMED_DOGEMAP
+                || inscriptionTransferEntity.InscriptionTransferType == InscriptionTransferType.CONFIRMED_NFT)
+            {
+                await DeleteInscriptionTransferAsync(inscriptionTransferEntity);
+            }
         }
 
         private async Task HandleInscriptionTransferAsync(InscriptionTransferRawData inscriptionTransferEntity)
@@ -156,6 +170,11 @@ namespace DogiHubIndexer.Services
                 default:
                     throw new ArgumentException("Invalid inscription transfer type", nameof(InscriptionTransferType));
             }
+
+            if (_options.DeleteTransactionHistory)
+            {
+                await DeleteInscriptionTransferAsync(inscriptionTransferEntity);
+            }
         }
 
         #region DELOY
@@ -169,7 +188,9 @@ namespace DogiHubIndexer.Services
                 return;
             }
 
-            await _tokenInfoReadModelRepository.AddAsync(inscriptionTransferEntity.Inscription!.ToTokenReadModel());
+            await _tokenInfoReadModelRepository.AddAsync(
+                inscriptionTransferEntity.ToTokenReadModel(inscriptionTransferEntity.Date)
+            );
         }
         #endregion
 
@@ -323,8 +344,6 @@ namespace DogiHubIndexer.Services
 
             receiverBalanceReadModel.IncreaseConfirmedBalance(amt);
             await _userBalanceTokensReadModelRepository.UpdateAsync(receiverBalanceReadModel);
-
-            await DeleteConfirmedInscriptionTransferAsync(inscriptionTransferEntity);
         }
 
         #endregion
@@ -371,8 +390,6 @@ namespace DogiHubIndexer.Services
 
             receiverBalanceDnsReadModel.ConfirmBalance();
             await _userBalanceDnsReadModelRepository.UpdateAsync(receiverBalanceDnsReadModel);
-
-            await DeleteConfirmedInscriptionTransferAsync(inscriptionTransferEntity);
         }
         #endregion
 
@@ -418,8 +435,6 @@ namespace DogiHubIndexer.Services
 
             receiverBalanceDogemapReadModel.ConfirmBalance();
             await _userBalanceDogemapsReadModelRepository.UpdateAsync(receiverBalanceDogemapReadModel);
-
-            await DeleteConfirmedInscriptionTransferAsync(inscriptionTransferEntity);
         }
         #endregion
 
@@ -464,16 +479,14 @@ namespace DogiHubIndexer.Services
 
             receiverBalanceNftsReadModel.ConfirmBalance();
             await _userBalanceNftsReadModelRepository.UpdateAsync(receiverBalanceNftsReadModel);
-
-            await DeleteConfirmedInscriptionTransferAsync(inscriptionTransferEntity);
         }
         #endregion
 
-        private async Task DeleteConfirmedInscriptionTransferAsync(InscriptionTransferRawData inscriptionTransferEntity)
+        private async Task DeleteInscriptionTransferAsync(InscriptionTransferRawData inscriptionTransferEntity)
         {
             await _inscriptionTransferRepository.DeleteAsync(
+                inscriptionTransferEntity.TransactionHash,
                 inscriptionTransferEntity.BlockNumber,
-                inscriptionTransferEntity.TransactionIndex,
                 inscriptionTransferEntity.Inscription!);
         }
 

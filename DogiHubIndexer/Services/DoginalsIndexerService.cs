@@ -14,30 +14,41 @@ namespace DogiHubIndexer.Services
         private readonly IBlockService _blockService;
         private readonly IInscriptionTransferService _inscriptionTransferService;
         private readonly ILogger _logger;
+        private readonly Options _options;
 
         public DoginalsIndexerService(
             IBlockService blockService,
             IInscriptionTransferService inscriptionTransferService,
             ILogger logger,
-            IRedisClient redisClient)
+            IRedisClient redisClient,
+            Options options)
         {
             _blockService = blockService;
             _inscriptionTransferService = inscriptionTransferService;
             _logger = logger;
             _redisClient = redisClient;
+            _options = options;
         }
 
         public async Task RunAsync(Options options)
         {
-            RPCClientPoolFactory rpcClientPoolFactory = GetRpcClientPoolFactory(options);
+            try
+            {
+                RPCClientPoolFactory rpcClientPoolFactory = GetRpcClientPoolFactory(options);
 
-            if (options.Mode == OptionsModeEnum.Startup)
-            {
-                await RunStartupModeAsync(options, rpcClientPoolFactory);
+                if (options.Mode == OptionsModeEnum.Startup)
+                {
+                    await RunStartupModeAsync(options, rpcClientPoolFactory);
+                }
+                else if (options.Mode == OptionsModeEnum.Daemon)
+                {
+                    await RunDaemonModeAsync(options, rpcClientPoolFactory);
+                }
             }
-            else if (options.Mode == OptionsModeEnum.Daemon)
+            catch (Exception ex)
             {
-                await RunDaemonModeAsync(options, rpcClientPoolFactory);
+                _logger.Error(ex, "unhandled exception");
+                throw;
             }
         }
 
@@ -47,6 +58,7 @@ namespace DogiHubIndexer.Services
 
             var firstInscriptionBlockNumber = ulong.Parse(options.FirstInscriptionBlockHeight);
 
+            var startBlockNumber = lastSyncBlockNumber.HasValue ? lastSyncBlockNumber.Value + 1 : firstInscriptionBlockNumber;
             var endBlockNumber = await GetLastBlockchainBlockNumber(rpcClientPoolFactory);
             if (ulong.TryParse(options.LastStartupBlockHeight, out ulong lastStartupBlockHeight))
             {
@@ -56,9 +68,10 @@ namespace DogiHubIndexer.Services
             await HandleBlocks(
                 options,
                 rpcClientPoolFactory,
-                lastSyncBlockNumber ?? firstInscriptionBlockNumber,
+                startBlockNumber,
                 endBlockNumber,
-                usePending: false
+                usePending: false,
+                automaticDumpStep: _options.StartupAutomaticDumpStep
             );
 
             await _redisClient.RunDumpAsync(endBlockNumber);
@@ -84,8 +97,8 @@ namespace DogiHubIndexer.Services
 
                 try
                 {
-                    //we stay 12 blocks late behind blockchain
-                    if (lastBlockchainBlockNumber - lastSyncBlockNumber.Value > 12)
+                    //we stay by default 12 blocks late behind blockchain
+                    if (lastBlockchainBlockNumber - lastSyncBlockNumber.Value > (ulong)options.NumberOfBlockBehindBlockchain.GetValueOrDefault(0))
                     {
                         var currentBlockNumber = lastSyncBlockNumber.Value + 1;
 
@@ -113,12 +126,12 @@ namespace DogiHubIndexer.Services
                 }
                 catch (Exception)
                 {
-
+                    throw;
                 }
                 finally
                 {
                     // if we are too close from last blockchain height wait 10 seconds
-                    if (lastBlockchainBlockNumber - lastSyncBlockNumber.Value <= 12)
+                    if (lastBlockchainBlockNumber - lastSyncBlockNumber.Value <= (ulong)options.NumberOfBlockBehindBlockchain.GetValueOrDefault(0))
                     {
                         Thread.Sleep(10000);
                     }
@@ -140,16 +153,26 @@ namespace DogiHubIndexer.Services
             RPCClientPoolFactory rpcClientPoolFactory,
             ulong startBlockNumber,
             ulong endBlockNumber,
-            bool usePending)
+            bool usePending,
+            int? automaticDumpStep)
         {
+            int blocksSinceLastDump = 0;
+
             var totalBlockToParse = endBlockNumber - startBlockNumber;
-            var percentageIndex = 1;
+            var percentageIndex = 0;
             for (var i = startBlockNumber; i <= endBlockNumber; i++)
             {
                 var percentage = Math.Round((decimal)percentageIndex / totalBlockToParse * 100, 2);
                 _logger.Information("Parsing block {blockNumber} - {percentage}%", i, percentage);
                 await HandleBlock(rpcClientPoolFactory, i, usePending);
                 percentageIndex++;
+                blocksSinceLastDump++;
+
+                if (automaticDumpStep.HasValue && blocksSinceLastDump >= automaticDumpStep.Value)
+                {
+                    await _redisClient.RunDumpAsync(i);
+                    blocksSinceLastDump = 0;
+                }
             }
         }
 
